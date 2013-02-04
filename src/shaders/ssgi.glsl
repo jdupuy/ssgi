@@ -3,6 +3,7 @@
 #ifndef SAMPLE_CNT
 #	error SAMPLE_CNT undefined
 #endif
+#define PI 3.14
 
 
 // --------------------------------------------------
@@ -18,6 +19,7 @@ uniform vec2 uTanFovs;     // tangent of field of views
 uniform vec3 uLightPos;    // ligh pos in view space
 uniform int uSampleCnt;    // number of samples
 uniform float uRadius;     // radius size
+uniform float uGiBoost;    // gi boost
 
 layout(std140)
 uniform Samples {
@@ -71,7 +73,7 @@ void main() {
 	float occ = 0.0;
 	float occCnt = 0.0;
 	vec3 rvec = texture(sNoise, gl_FragCoord.xy/64.0).rgb*2.0-1.0;
-	for(int i=0; i<uSampleCnt; ++i) {
+	for(int i=0; i<uSampleCnt && t1.a < 1.0; ++i) {
 		vec3 dir = reflect(uSamples[i].xyz,rvec); // a la Crysis
 		dir -= 2.0*dir*step(dot(n,dir),0.0);      // a la Starcraft
 		vec3 sp = p + (dir * uRadius) * (t1.a * 1e2); // scale radius with depth
@@ -89,9 +91,35 @@ void main() {
 		occ += max(0.0,dot(normalize(occVec),n)-0.42) / (att2*att2);
 		++occCnt;
 	};
-	oColour.rgb= occCnt > 0.0 ? vec3(1.0-occ/occCnt) : vec3(1);
+	oColour.rgb*= occCnt > 0.0 ? vec3(1.0-occ*uGiBoost/occCnt) : vec3(1);
 #elif defined GI_SSDO
-	oColour = vec4(1);
+	vec3 gi = vec3(0.0);
+	float giCnt = 0.0;
+	vec3 rvec = texture(sNoise, gl_FragCoord.xy/64.0).rgb*2.0-1.0;
+	for(int i=0; i<uSampleCnt && t1.a < 1.0; ++i) {
+		vec3 dir = reflect(uSamples[i].xyz,rvec); // a la Crysis
+		dir -= 2.0*dir*step(dot(n,dir),0.0);      // a la Starcraft
+		vec3 sp = p + (dir * uRadius) * (t1.a * 1e2); // scale radius with depth
+		vec2 spNdc = view_to_ndc(sp, uClipZ, uTanFovs); // get sample ndc coords
+		bvec4 outOfScreen = bvec4(false); // check if sample projects to screen
+		outOfScreen.xy = lessThan(spNdc, vec2(-1));
+		outOfScreen.zw = greaterThan(spNdc, vec2(1));
+		if(any(outOfScreen)) continue;
+		vec2 spSt = (spNdc*0.5 + 0.5)*uScreenSize;
+		vec4 spNd = texture(sNd,spSt); // get nd data
+		if(spNd.a >= 1.0) continue;
+		vec3 occEye = -sp/sp.z*(spNd.a*uClipZ.x+uClipZ.y); // compute correct pos
+		vec3 occVec = occEye - p; // vector
+		float att2 = 1.0+1e-3*length(occVec); // quadratic attenuation
+		vec3 spL = uLightPos - occEye; // sample light vec
+		vec3 spKa = texture(sKa, spSt).rgb; // sample albedo
+		vec3 spN = spNd.rgb*2.0-1.0; // sample normal
+		float spAtt = 1.0+1e-3*length(spL); // quadratic attenuation
+		vec3 spE = 2.0*spKa*max(0.0,dot(normalize(spL),spN))/(spAtt*spAtt);
+		gi+= spE*max(0.0,dot(normalize(occVec),n))/(att2*att2);
+		++giCnt;
+	};
+	oColour.rgb += giCnt > 0.0 ? t2*gi*uGiBoost/giCnt : vec3(0);
 #endif // GI_SSAO
 }
 #endif // _FRAGMENT_
