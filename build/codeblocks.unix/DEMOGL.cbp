@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="DEMOGL" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="debug">
+				<Option output="../../bin/debug/DEMOGL" prefix_auto="0" extension_auto="0" />
+				<Option object_output="obj/debug" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+					<Add option="-Wall" />
+					<Add option="-DDEBUG" />
+					<Add option="-D_UNIX" />
+					<Add directory="../../src/anttweakbar" />
+					<Add directory="../../src/gl3w" />
+					<Add directory="../../src/freeglut" />
+					<Add directory="../../src/math" />
+				</Compiler>
+				<Linker>
+					<Add library="X11" />
+					<Add library="GL" />
+					<Add library="Xext" />
+					<Add library="m" />
+				</Linker>
+			</Target>
+			<Target title="release">
+				<Option output="../../bin/release/DEMOGL" prefix_auto="0" extension_auto="0" />
+				<Option object_output="obj/release" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+					<Add option="-DNDEBUG" />
+					<Add option="-D_UNIX" />
+					<Add directory="../../src/anttweakbar" />
+					<Add directory="../../src/gl3w" />
+					<Add directory="../../src/freeglut" />
+					<Add directory="../../src/math" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+					<Add library="X11" />
+					<Add library="GL" />
+					<Add library="Xext" />
+					<Add library="m" />
+				</Linker>
+			</Target>
+		</Build>
+		<Unit filename="../../src/glu.cpp">
+		</Unit>
+		<Unit filename="../../src/main.cpp">
+		</Unit>
+		<Unit filename="../../src/debug.cpp">
+		</Unit>
+		<Unit filename="../../src/callbacks.cpp">
+		</Unit>
+		<Unit filename="../../src/gl3w/gl3w.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwEventGLUT.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_display.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_init.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_callbacks.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_stroke_roman.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_gamemode.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_main.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_window.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_glutfont_definitions.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_ext.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_cursor.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_spaceball.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_misc.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_input_devices.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_font_data.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_stroke_mono_roman.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_structure.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_geometry.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_teapot.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_font.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_xinput.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_state.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_joystick.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_menu.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_overlay.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/freeglut/freeglut_videoresize.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwBar.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/LoadOGL.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwOpenGLCore.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/LoadOGLCore.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwMgr.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwOpenGL.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwPrecomp.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwColors.cpp">
+		</Unit>
+		<Unit filename="../../src/anttweakbar/TwFonts.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Affine.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Matrix2x2.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Vector2.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Matrix4x4.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Vector3.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Projection.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Matrix3x3.cpp">
+		</Unit>
+		<Unit filename="../../src/math/Vector4.cpp">
+		</Unit>
+		<Extensions />
+	</Project>
+</CodeBlocks_project_file>
+
