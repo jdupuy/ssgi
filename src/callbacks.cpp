@@ -1,7 +1,7 @@
 ///////////////////////////////////////////////////////////////////////
 // \file callbacks.cpp
 // \author Jonathan Dupuy (onrendering@gmail.com)
-// \brief main function
+// \brief main callbacks
 //
 ///////////////////////////////////////////////////////////////////////
 
@@ -66,6 +66,7 @@ enum {
 	LOCATION_SSGI_SAMPLECNT,
 	LOCATION_SSGI_SAMPLES,
 	LOCATION_SSGI_RADIUS,
+	LOCATION_SSGI_GIBOOST,
 	LOCATION_COUNT,
 
 	UNIFORM_BINDING_SAMPLES = 0,
@@ -102,8 +103,10 @@ bool leftButton(false), rightButton(false);
 // visualisation
 bool wireframe(false);
 GLint sampleCnt(8);   // samples per pixel
+GLint giMode(GI_NONE); // global illum mode
 GLfloat radius(3.0f); // radius size
-GLint giMode(GI_NONE);
+GLfloat giBoost(1.0f); // gi boost
+bool rotate(true);   // rotate scene;
 
 
 // --------------------------------------------------------------------
@@ -119,6 +122,7 @@ static GLvoid setup_hud();
 static GLvoid TW_CALL gen_samples(GLvoid *twSatisfy);
 static GLvoid TW_CALL set_sample_count(const GLvoid *value, GLvoid *clientData);
 static GLvoid TW_CALL set_radius(const GLvoid *value, GLvoid *clientData);
+static GLvoid TW_CALL set_boost(const GLvoid *value, GLvoid *clientData);
 static GLvoid TW_CALL set_gi(const GLvoid *value, GLvoid *clientData);
 template<typename T>
 static GLvoid TW_CALL get_t(GLvoid *value, GLvoid *clientData);
@@ -170,12 +174,15 @@ GLvoid on_init(GLint argc, GLchar **argv) {
 // on_display
 GLvoid on_display() {
 	// build matrices
+	static GLfloat t = 0.0f;
+	t = fmod(t+0.025f, 2.0*PI);
 	Matrix4x4 mv = cameraFrame.ExtractTransformMatrix();
 	Matrix4x4 mvp = Matrix4x4::Perspective(FOVY,RATIO,ZNEAR,ZFAR) 
 	              * mv;
 	Matrix3x3 rot = cameraFrame.GetUnitAxis();
 	Vector3 eye   = rot.Transpose() * -cameraFrame.GetPosition();
-	Vector4 light = mv*Vector4(0,0,0,1);
+	Vector4 light = rotate ? mv*Vector4(cos(t)*450.0,0,sin(t)*450.0,1)
+	                       : mv*Vector4(0,0,0,1);
 
 	// update mvp TODO: use UBO and buffer streaming
 	glProgramUniformMatrix4fv(programs[PROGRAM_CORNELL],
@@ -379,6 +386,8 @@ static GLvoid load_programs() {
 		= glGetUniformLocation(programs[PROGRAM_SSGI],"uSampleCnt");
 	locations[LOCATION_SSGI_RADIUS]
 		= glGetUniformLocation(programs[PROGRAM_SSGI],"uRadius");
+	locations[LOCATION_SSGI_GIBOOST]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uGiBoost");
 	locations[LOCATION_SSGI_ND]
 		= glGetUniformLocation(programs[PROGRAM_SSGI],"sNd");
 	locations[LOCATION_SSGI_ALBEDO]
@@ -411,6 +420,9 @@ static GLvoid load_programs() {
 	glProgramUniform1f(programs[PROGRAM_SSGI],
 	                   locations[LOCATION_SSGI_RADIUS],
 	                   radius);
+	glProgramUniform1f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_GIBOOST],
+	                   giBoost);
 	glProgramUniform1i(programs[PROGRAM_SSGI],
 	                   locations[LOCATION_SSGI_ND],
 	                   TEXTURE_ND);
@@ -491,7 +503,6 @@ static GLvoid load_textures() {
 			GLubyte r1 = GLubyte(glu::random(0,255));
 			GLubyte r2 = GLubyte(glu::random(0,255));
 			GLubyte r3 = GLubyte(glu::random(0,255));
-			LOG(GLint(r1) << ' ' << GLint(r2) << ' ' << GLint(r3));
 			noise[i] = r1 | r2 << 8 | r3 << 16;
 		}
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 64, 64, 
@@ -607,6 +618,20 @@ static GLvoid setup_hud() {
 	           "group='SSGI' \
 	            min=0.1 max=128 \
 	            help='Radius.'");
+	TwAddVarCB(hud,
+	           "Boost",
+	           TW_TYPE_FLOAT,
+	           &set_boost,
+	           &get_t<GLfloat>,
+	           &giBoost,
+	           "group='SSGI' \
+	            min=0.1 max=128 \
+	            help='Boost GI.'");
+	TwAddVarRW(hud, 
+	           "Rotate light",
+	           TW_TYPE_BOOLCPP,
+	           &rotate,
+	           "true=ON false=OFF");
 
 	TwEnumVal giEV[] = {
 		{GI_NONE, "None"  },
@@ -656,6 +681,14 @@ static GLvoid TW_CALL set_radius(const GLvoid *value,
 	glProgramUniform1f(programs[PROGRAM_SSGI],
 	                   locations[LOCATION_SSGI_RADIUS],
 	                   radius);
+}
+
+static GLvoid TW_CALL set_boost(const GLvoid *value, 
+                                      GLvoid *clientData) {
+	giBoost = *reinterpret_cast<const GLfloat *>(value);
+	glProgramUniform1f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_GIBOOST],
+	                   giBoost);
 }
 
 static GLvoid TW_CALL set_gi(const GLvoid *value, GLvoid *clientData) {
