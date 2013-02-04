@@ -11,6 +11,7 @@
 #include <cstring>   // memcpy
 #include <algorithm> // std::min std::max
 #include <cmath>     // ldexp
+#include <cstdlib>   // RAND_MAX
 
 #ifdef _WIN32
 #	define NOMINMAX
@@ -871,6 +872,12 @@ GLvoid sleep(GLint ms) {
 #endif
 }
 
+// --------------------------------------------------------------------
+// random
+GLdouble random(GLdouble min, GLdouble max) {
+	GLdouble r = GLdouble(rand())/GLdouble(RAND_MAX);
+	return min + r*(max-min);
+}
 
 // --------------------------------------------------------------------
 // load GLSL program

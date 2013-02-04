@@ -147,6 +147,9 @@ namespace glu {
 	// Sleep for a specific amount of milliseconds
 	GLvoid sleep(GLint ms);
 
+	// Random sample in range [min,max]
+	GLdouble random(GLdouble min, GLdouble max);
+
 
 // --------------------------------------------------------------------
 // Timing (requires GL_ARB_timer_query)
@@ -266,7 +269,6 @@ namespace glu {
 		TexImageRgba4ub(const TexImageRgba4ub& rgba);
 		TexImageRgba4ub& operator=(const TexImageRgba4ub& rgba);
 	};
-
 
 	// TGA TexImage loader (see glu.cpp)
 	class TexImageTga : public TexImage {
