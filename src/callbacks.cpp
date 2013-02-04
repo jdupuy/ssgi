@@ -12,21 +12,24 @@
 #include "glu.hpp"
 #include "AntTweakBar.h"
 #include "Transform.hpp"
+#include <cmath>
 
 
 // --------------------------------------------------------------------
 // macros / constants
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT          0x84FE
-#define PI         3.14159265359f
-#define WIDTH      1024
-#define HEIGHT     700
-#define ZNEAR      0.1f
-#define ZFAR       5000.f
-
+#define PI          3.14159265359f
+#define WIDTH       1024
+#define HEIGHT      700
+#define ZNEAR       0.1f
+#define ZFAR        3000.f
+#define SAMPLE_CNT  32
+const GLfloat FOVY  = PI*0.35f;
+const GLfloat RATIO = GLfloat(WIDTH)/GLfloat(HEIGHT);
 
 // names
 enum {
-	BUFFER_RANDOM = 0,
+	BUFFER_SAMPLES = 0,
 	BUFFER_COUNT,
 
 	VERTEX_ARRAY_EMPTY = 0,
@@ -35,6 +38,7 @@ enum {
 	TEXTURE_ND = 0,
 	TEXTURE_ALBEDO,
 	TEXTURE_CORNELL,
+	TEXTURE_NOISE,
 	TEXTURE_COUNT,
 
 	RENDERBUFFER_DEPTH = 0,
@@ -54,12 +58,23 @@ enum {
 	LOCATION_CORNELL_SKY,
 	LOCATION_SSGI_ND,
 	LOCATION_SSGI_ALBEDO,
+	LOCATION_SSGI_NOISE,
 	LOCATION_SSGI_SCREENSIZE,
-	LOCATION_SSGI_LIGHTDIR,
+	LOCATION_SSGI_LIGHTPOS,
+	LOCATION_SSGI_TANFOV,
+	LOCATION_SSGI_CLIPZ,
+	LOCATION_SSGI_SAMPLECNT,
+	LOCATION_SSGI_SAMPLES,
+	LOCATION_SSGI_RADIUS,
 	LOCATION_COUNT,
 
-	UNIFORM_BINDING_RANDOM = 0,
-	UNIFORM_BINDING_COUNT
+	UNIFORM_BINDING_SAMPLES = 0,
+	UNIFORM_BINDING_COUNT,
+
+	GI_NONE = 0,
+	GI_SSAO,
+	GI_SSDO,
+	GI_COUNT
 };
 
 
@@ -86,6 +101,9 @@ bool leftButton(false), rightButton(false);
 
 // visualisation
 bool wireframe(false);
+GLint sampleCnt(8);   // samples per pixel
+GLfloat radius(3.0f); // radius size
+GLint giMode(GI_NONE);
 
 
 // --------------------------------------------------------------------
@@ -96,7 +114,12 @@ static GLvoid load_textures();
 static GLvoid load_renderbuffers();
 static GLvoid load_framebuffers();
 static GLvoid setup_hud();
+
 // gui callbacks
+static GLvoid TW_CALL gen_samples(GLvoid *twSatisfy);
+static GLvoid TW_CALL set_sample_count(const GLvoid *value, GLvoid *clientData);
+static GLvoid TW_CALL set_radius(const GLvoid *value, GLvoid *clientData);
+static GLvoid TW_CALL set_gi(const GLvoid *value, GLvoid *clientData);
 template<typename T>
 static GLvoid TW_CALL get_t(GLvoid *value, GLvoid *clientData);
 
@@ -135,7 +158,7 @@ GLvoid on_init(GLint argc, GLchar **argv) {
 	setup_hud();
 
 	// set state
-	glClearColor(1.0,0.0,0.0,0.0);
+	glClearColor(0.0,0.0,0.0,1.0);
 	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 	glEnable(GL_CULL_FACE);
 	glPatchParameteri(GL_PATCH_VERTICES,4);
@@ -147,15 +170,12 @@ GLvoid on_init(GLint argc, GLchar **argv) {
 // on_display
 GLvoid on_display() {
 	// build matrices
-	Matrix4x4 mvp = Matrix4x4::Perspective(PI*0.35f,
-	                                       WIDTH/GLfloat(HEIGHT),
-	                                       ZNEAR,
-	                                       ZFAR)
-	              * cameraFrame.ExtractTransformMatrix();
+	Matrix4x4 mv = cameraFrame.ExtractTransformMatrix();
+	Matrix4x4 mvp = Matrix4x4::Perspective(FOVY,RATIO,ZNEAR,ZFAR) 
+	              * mv;
 	Matrix3x3 rot = cameraFrame.GetUnitAxis();
 	Vector3 eye   = rot.Transpose() * -cameraFrame.GetPosition();
-	Vector3 light = rot * Vector3(1,2,1);
-	light = light.Normalize();
+	Vector4 light = mv*Vector4(0,0,0,1);
 
 	// update mvp TODO: use UBO and buffer streaming
 	glProgramUniformMatrix4fv(programs[PROGRAM_CORNELL],
@@ -168,7 +188,7 @@ GLvoid on_display() {
 	                    locations[LOCATION_CORNELL_EYE],
 	                    1, &eye[0]);
 	glProgramUniform3fv(programs[PROGRAM_SSGI],
-	                    locations[LOCATION_SSGI_LIGHTDIR],
+	                    locations[LOCATION_SSGI_LIGHTPOS],
 	                    1, &light[0]);
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers[FRAMEBUFFER_ND]);
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -309,6 +329,13 @@ GLvoid set_window_params(WindowParams &windowParams) {
 // load programs
 static GLvoid load_programs() {
 	const std::string SHADER_DIR("../../src/shaders/");
+	std::ostringstream c;
+	c << SAMPLE_CNT;
+	std::string ssgiOpt("#define SAMPLE_CNT "+c.str()+'\n');
+	if(giMode==GI_SSAO)
+		ssgiOpt+= "#define GI_SSAO\n";
+	else if(giMode==GI_SSDO)
+		ssgiOpt+= "#define GI_SSDO\n";
 
 	// cleanup
 	if(glIsProgram(programs[0]))
@@ -320,15 +347,13 @@ static GLvoid load_programs() {
 		programs[i] = glCreateProgram();
 
 	// load
-//	std::string options = geomOptStr[geometry];
-//	options+= cubemap == TEXTURE_GRACE ? "#define _SKY_GRACE\n" : "";
 	glu::load_glsl_program(programs[PROGRAM_CORNELL],
 	                       SHADER_DIR+std::string("cornell.glsl"),
 	                       "",
 	                       GL_TRUE);
 	glu::load_glsl_program(programs[PROGRAM_SSGI],
 	                       SHADER_DIR+std::string("ssgi.glsl"),
-	                       "",
+	                       ssgiOpt,
 	                       GL_TRUE);
 
 	// save uniform locations
@@ -344,12 +369,24 @@ static GLvoid load_programs() {
 		= glGetUniformLocation(programs[PROGRAM_CORNELL],"sSky");
 	locations[LOCATION_SSGI_SCREENSIZE]
 		= glGetUniformLocation(programs[PROGRAM_SSGI],"uScreenSize");
-	locations[LOCATION_SSGI_LIGHTDIR]
-		= glGetUniformLocation(programs[PROGRAM_SSGI],"uLightDir");
+	locations[LOCATION_SSGI_LIGHTPOS]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uLightPos");
+	locations[LOCATION_SSGI_TANFOV]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uTanFovs");
+	locations[LOCATION_SSGI_CLIPZ]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uClipZ");
+	locations[LOCATION_SSGI_SAMPLECNT]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uSampleCnt");
+	locations[LOCATION_SSGI_RADIUS]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uRadius");
 	locations[LOCATION_SSGI_ND]
 		= glGetUniformLocation(programs[PROGRAM_SSGI],"sNd");
 	locations[LOCATION_SSGI_ALBEDO]
 		= glGetUniformLocation(programs[PROGRAM_SSGI],"sKa");
+	locations[LOCATION_SSGI_NOISE]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"sNoise");
+	locations[LOCATION_SSGI_SAMPLES]
+		= glGetUniformBlockIndex(programs[PROGRAM_SSGI],"Samples");
 
 	// set constants
 	glProgramUniform1i(programs[PROGRAM_CORNELL],
@@ -359,15 +396,33 @@ static GLvoid load_programs() {
 	                   locations[LOCATION_CORNELL_PLANES],
 //	                   ZNEAR, ZFAR);
 	                   1.f/(ZFAR-ZNEAR), -ZNEAR/(ZFAR-ZNEAR));
+	glProgramUniform2f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_SCREENSIZE],
+	                   WIDTH,HEIGHT);
+	glProgramUniform2f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_TANFOV],
+	                   tan(FOVY*RATIO*0.5f),tan(FOVY*0.5f));
+	glProgramUniform2f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_CLIPZ],
+	                   ZFAR-ZNEAR,+ZNEAR);
+	glProgramUniform1i(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_SAMPLECNT],
+	                   sampleCnt);
+	glProgramUniform1f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_RADIUS],
+	                   radius);
 	glProgramUniform1i(programs[PROGRAM_SSGI],
 	                   locations[LOCATION_SSGI_ND],
 	                   TEXTURE_ND);
 	glProgramUniform1i(programs[PROGRAM_SSGI],
 	                   locations[LOCATION_SSGI_ALBEDO],
 	                   TEXTURE_ALBEDO);
-	glProgramUniform2f(programs[PROGRAM_SSGI],
-	                   locations[LOCATION_SSGI_SCREENSIZE],
-	                   WIDTH,HEIGHT);
+	glProgramUniform1i(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_NOISE],
+	                   TEXTURE_NOISE);
+	glUniformBlockBinding(programs[PROGRAM_SSGI],
+	                      locations[LOCATION_SSGI_SAMPLES],
+	                      UNIFORM_BINDING_SAMPLES);
 }
 
 
@@ -377,9 +432,9 @@ static GLvoid load_textures() {
 	const std::string TEXTURE_DIR("../../textures/");
 	glActiveTexture(GL_TEXTURE0+TEXTURE_CORNELL);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, textures[TEXTURE_CORNELL]); {
-		glu::TexImageRgba4ub red  (64,64,1,255,0,0,255);
-		glu::TexImageRgba4ub green(64,64,1,0,255,0,255);
-		glu::TexImageRgba4ub white(64,64,1,255,255,255,255);
+		glu::TexImageRgba4ub red  (256,256,1,255,0,0,255);
+		glu::TexImageRgba4ub green(256,256,1,0,255,0,255);
+		glu::TexImageRgba4ub white(256,256,1,255,255,255,255);
 		glu::TexImageArray array;
 		array.push_back(&green); // xpos
 		array.push_back(&red);   // xneg
@@ -424,6 +479,37 @@ static GLvoid load_textures() {
 		glTexParameteri(GL_TEXTURE_RECTANGLE,
 		                GL_TEXTURE_MAG_FILTER,
 		                GL_LINEAR);
+	glActiveTexture(GL_TEXTURE0+TEXTURE_NOISE);
+	glBindTexture(GL_TEXTURE_2D, textures[TEXTURE_NOISE]);
+		glTexStorage2D(GL_TEXTURE_2D,
+		               1,
+		               GL_RGB8,
+		               64,64);
+	{
+		std::vector<GLint> noise(64*64);
+		for(GLint i=0;i<64*64;++i) {
+			GLubyte r1 = GLubyte(glu::random(0,255));
+			GLubyte r2 = GLubyte(glu::random(0,255));
+			GLubyte r3 = GLubyte(glu::random(0,255));
+			LOG(GLint(r1) << ' ' << GLint(r2) << ' ' << GLint(r3));
+			noise[i] = r1 | r2 << 8 | r3 << 16;
+		}
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 64, 64, 
+		                GL_RGBA, GL_UNSIGNED_BYTE, &noise[0]);
+	}
+		glTexParameteri(GL_TEXTURE_2D,
+		                GL_TEXTURE_MIN_FILTER,
+		                GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D,
+		                GL_TEXTURE_MAG_FILTER,
+		                GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D,
+		                GL_TEXTURE_WRAP_S,
+		                GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D,
+		                GL_TEXTURE_WRAP_T,
+		                GL_REPEAT);
+	glActiveTexture(GL_TEXTURE0); // for ant ?
 }
 
 
@@ -443,7 +529,7 @@ static GLvoid load_renderbuffers() {
 // ====================================================================
 // setup framebuffers
 static GLvoid load_framebuffers() {
-	const GLenum drawBuffers[]={GL_COLOR_ATTACHMENT0, 
+	const GLenum drawBuffers[]={GL_COLOR_ATTACHMENT0,
 	                            GL_COLOR_ATTACHMENT1};
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers[FRAMEBUFFER_ND]);
 		glFramebufferTexture2D(GL_FRAMEBUFFER,
@@ -470,8 +556,16 @@ static GLvoid load_framebuffers() {
 // ====================================================================
 // setup buffers
 static GLvoid load_buffers() {
-	glBindBuffer(GL_UNIFORM_BUFFER, buffers[BUFFER_RANDOM]);
+	glBindBuffer(GL_UNIFORM_BUFFER, buffers[BUFFER_SAMPLES]);
+		glBufferData(GL_UNIFORM_BUFFER,
+		             sizeof(Vector4)*SAMPLE_CNT,
+		             NULL,
+		             GL_STATIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	glBindBufferBase(GL_UNIFORM_BUFFER, 
+	                 UNIFORM_BINDING_SAMPLES,
+	                 buffers[BUFFER_SAMPLES]);
+	gen_samples(NULL);
 }
 
 // ====================================================================
@@ -490,25 +584,85 @@ static GLvoid setup_hud() {
 	TwDefine("HUD text='light'");
 	TwDefine("HUD valueswidth=64");
 
-//	TwEnumVal geometryEV[] = {
-//		{GEOMETRY_SPHERE,      "Sphere"     },
-//		{GEOMETRY_TORUS,       "Torus"      },
-//		{GEOMETRY_SHELL,       "Shell"      },
-//		{GEOMETRY_KLEINBOTTLE, "Kleinbottle"}
-//	};
-//	TwType geometryType= TwDefineEnum("Geometry", geometryEV, 4);
-//	TwAddVarCB(hud,
-//	           "Geometry",
-//	           geometryType,
-//	           &set_geometry,
-//	           &get_t<GLint>,
-//	           &geometry,
-//	           "help='Change geometry.' group='Scene' ");
+	TwAddButton(hud,
+	            "Gen samples",
+	            &gen_samples,
+	            NULL,
+	            "group= SSGI help='Generate new samples'");
+	TwAddVarCB(hud,
+	           "Sample count",
+	           TW_TYPE_INT32,
+	           &set_sample_count,
+	           &get_t<GLint>,
+	           &sampleCnt,
+	           "group='SSGI' \
+	            min=1 max=32 \
+	            help='Number of samples per pixel.'");
+	TwAddVarCB(hud,
+	           "Radius",
+	           TW_TYPE_FLOAT,
+	           &set_radius,
+	           &get_t<GLfloat>,
+	           &radius,
+	           "group='SSGI' \
+	            min=0.1 max=128 \
+	            help='Radius.'");
+
+	TwEnumVal giEV[] = {
+		{GI_NONE, "None"  },
+		{GI_SSAO, "SSAO" },
+		{GI_SSDO, "SSDO" }
+	};
+	TwType giMethod= TwDefineEnum("Gi", giEV, 3);
+	TwAddVarCB(hud,
+	           "GI method",
+	           giMethod,
+	           &set_gi,
+	           &get_t<GLint>,
+	           &giMode,
+	           "help='Global illum method.' group='SSGI' ");
 }
 
 
 // ====================================================================
 // gui callbacks
+static GLvoid TW_CALL gen_samples(GLvoid *twSatisfy) {
+	std::vector<Vector4> samples(SAMPLE_CNT);
+	for(GLint i=0; i<SAMPLE_CNT; ++i) {
+		Vector3 dir = Vector3(glu::random(-1.0,1.0),
+		                      glu::random(-1.0,1.0),
+		                      glu::random(-1.0,1.0)).Normalize();
+		samples[i] = glu::random(1e-5,1.0)*Vector4(dir[0],dir[1],dir[2],1.0);
+	}
+	glBindBuffer(GL_UNIFORM_BUFFER, buffers[BUFFER_SAMPLES]);
+		Vector4 *p = reinterpret_cast<Vector4 *>
+			(glMapBuffer(GL_UNIFORM_BUFFER,GL_WRITE_ONLY));
+		memcpy(p, &samples[0], SAMPLE_CNT*sizeof(Vector4));
+		glUnmapBuffer(GL_UNIFORM_BUFFER);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
+static GLvoid TW_CALL set_sample_count(const GLvoid *value, 
+                                       GLvoid *clientData) {
+	sampleCnt = *reinterpret_cast<const GLint *>(value);
+	glProgramUniform1i(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_SAMPLECNT],
+	                   sampleCnt);
+}
+
+static GLvoid TW_CALL set_radius(const GLvoid *value, 
+                                       GLvoid *clientData) {
+	radius = *reinterpret_cast<const GLfloat *>(value);
+	glProgramUniform1f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_RADIUS],
+	                   radius);
+}
+
+static GLvoid TW_CALL set_gi(const GLvoid *value, GLvoid *clientData) {
+	giMode = *reinterpret_cast<const GLint *>(value);
+	load_programs();
+}
+
 template<typename T>
 static inline GLvoid TW_CALL get_t(GLvoid *value, GLvoid *clientData) {
 	*reinterpret_cast<T*>(value) = 
