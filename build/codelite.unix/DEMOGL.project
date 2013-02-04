@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CodeLite_Project Name="DEMOGL">
+  <VirtualDirectory Name="src">
+    <VirtualDirectory Name="gl3w">
+      <File Name="../../src/gl3w/gl3w.c"/>
+    </VirtualDirectory>
+    <VirtualDirectory Name="anttweakbar">
+      <File Name="../../src/anttweakbar/TwEventGLUT.c"/>
+      <File Name="../../src/anttweakbar/TwBar.cpp"/>
+      <File Name="../../src/anttweakbar/LoadOGL.cpp"/>
+      <File Name="../../src/anttweakbar/TwOpenGLCore.cpp"/>
+      <File Name="../../src/anttweakbar/LoadOGLCore.cpp"/>
+      <File Name="../../src/anttweakbar/TwMgr.cpp"/>
+      <File Name="../../src/anttweakbar/TwOpenGL.cpp"/>
+      <File Name="../../src/anttweakbar/TwPrecomp.cpp"/>
+      <File Name="../../src/anttweakbar/TwColors.cpp"/>
+      <File Name="../../src/anttweakbar/TwFonts.cpp"/>
+    </VirtualDirectory>
+    <VirtualDirectory Name="freeglut">
+      <File Name="../../src/freeglut/freeglut_display.c"/>
+      <File Name="../../src/freeglut/freeglut_init.c"/>
+      <File Name="../../src/freeglut/freeglut_callbacks.c"/>
+      <File Name="../../src/freeglut/freeglut_stroke_roman.c"/>
+      <File Name="../../src/freeglut/freeglut_gamemode.c"/>
+      <File Name="../../src/freeglut/freeglut_main.c"/>
+      <File Name="../../src/freeglut/freeglut_window.c"/>
+      <File Name="../../src/freeglut/freeglut_glutfont_definitions.c"/>
+      <File Name="../../src/freeglut/freeglut_ext.c"/>
+      <File Name="../../src/freeglut/freeglut_cursor.c"/>
+      <File Name="../../src/freeglut/freeglut_spaceball.c"/>
+      <File Name="../../src/freeglut/freeglut_misc.c"/>
+      <File Name="../../src/freeglut/freeglut_input_devices.c"/>
+      <File Name="../../src/freeglut/freeglut_font_data.c"/>
+      <File Name="../../src/freeglut/freeglut_stroke_mono_roman.c"/>
+      <File Name="../../src/freeglut/freeglut_structure.c"/>
+      <File Name="../../src/freeglut/freeglut_geometry.c"/>
+      <File Name="../../src/freeglut/freeglut_teapot.c"/>
+      <File Name="../../src/freeglut/freeglut_font.c"/>
+      <File Name="../../src/freeglut/freeglut_xinput.c"/>
+      <File Name="../../src/freeglut/freeglut_state.c"/>
+      <File Name="../../src/freeglut/freeglut_joystick.c"/>
+      <File Name="../../src/freeglut/freeglut_menu.c"/>
+      <File Name="../../src/freeglut/freeglut_overlay.c"/>
+      <File Name="../../src/freeglut/freeglut_videoresize.c"/>
+    </VirtualDirectory>
+    <VirtualDirectory Name="math">
+      <File Name="../../src/math/Affine.cpp"/>
+      <File Name="../../src/math/Matrix2x2.cpp"/>
+      <File Name="../../src/math/Vector2.cpp"/>
+      <File Name="../../src/math/Matrix4x4.cpp"/>
+      <File Name="../../src/math/Vector3.cpp"/>
+      <File Name="../../src/math/Projection.cpp"/>
+      <File Name="../../src/math/Matrix3x3.cpp"/>
+      <File Name="../../src/math/Vector4.cpp"/>
+    </VirtualDirectory>
+    <File Name="../../src/glu.cpp"/>
+    <File Name="../../src/main.cpp"/>
+    <File Name="../../src/debug.cpp"/>
+    <File Name="../../src/callbacks.cpp"/>
+  </VirtualDirectory>
+  <Settings Type="Executable">
+    <Configuration Name="debug" CompilerType="gnu g++" DebuggerType="GNU gdb debugger" Type="Executable">
+      <General OutputFile="../../bin/debug/DEMOGL" IntermediateDirectory="obj/debug" Command="./DEMOGL" CommandArguments="" WorkingDirectory="../../bin/debug" PauseExecWhenProcTerminates="yes"/>
+      <Compiler Required="yes" Options="-g;-Wall">
+        <IncludePath Value="../../src/anttweakbar"/>
+        <IncludePath Value="../../src/gl3w"/>
+        <IncludePath Value="../../src/freeglut"/>
+        <IncludePath Value="../../src/math"/>
+        <Preprocessor Value="DEBUG"/>
+        <Preprocessor Value="_UNIX"/>
+      </Compiler>
+      <Linker Required="yes" Options="">
+        <Library Value="X11"/>
+        <Library Value="GL"/>
+        <Library Value="Xext"/>
+        <Library Value="m"/>
+      </Linker>
+      <ResourceCompiler Required="no" Options=""/>
+      <CustomBuild Enabled="no">
+        <CleanCommand/>
+        <BuildCommand/>
+        <SingleFileCommand/>
+        <MakefileGenerationCommand/>
+        <ThirdPartyToolName>None</ThirdPartyToolName>
+        <WorkingDirectory/>
+      </CustomBuild>
+      <AdditionalRules>
+        <CustomPostBuild/>
+        <CustomPreBuild/>
+      </AdditionalRules>
+    </Configuration>
+    <Configuration Name="release" CompilerType="gnu g++" DebuggerType="GNU gdb debugger" Type="Executable">
+      <General OutputFile="../../bin/release/DEMOGL" IntermediateDirectory="obj/release" Command="./DEMOGL" CommandArguments="" WorkingDirectory="../../bin/release" PauseExecWhenProcTerminates="yes"/>
+      <Compiler Required="yes" Options="-O2">
+        <IncludePath Value="../../src/anttweakbar"/>
+        <IncludePath Value="../../src/gl3w"/>
+        <IncludePath Value="../../src/freeglut"/>
+        <IncludePath Value="../../src/math"/>
+        <Preprocessor Value="NDEBUG"/>
+        <Preprocessor Value="_UNIX"/>
+      </Compiler>
+      <Linker Required="yes" Options="-s">
+        <Library Value="X11"/>
+        <Library Value="GL"/>
+        <Library Value="Xext"/>
+        <Library Value="m"/>
+      </Linker>
+      <ResourceCompiler Required="no" Options=""/>
+      <CustomBuild Enabled="no">
+        <CleanCommand/>
+        <BuildCommand/>
+        <SingleFileCommand/>
+        <MakefileGenerationCommand/>
+        <ThirdPartyToolName>None</ThirdPartyToolName>
+        <WorkingDirectory/>
+      </CustomBuild>
+      <AdditionalRules>
+        <CustomPostBuild/>
+        <CustomPreBuild/>
+      </AdditionalRules>
+    </Configuration>
+  </Settings>
+  <Dependencies name="debug"/>
+  <Dependencies name="release"/>
+  <Dependencies Name="debug"/>
+  <Dependencies Name="release"/>
+</CodeLite_Project>

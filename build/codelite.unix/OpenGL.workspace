@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CodeLite_Workspace Name="OpenGL" Database="./OpenGL.tags">
+  <Project Name="DEMOGL" Path="DEMOGL.project" Active="Yes" />
+  <BuildMatrix>
+    <WorkspaceConfiguration Name="debug" Selected="yes">
+      <Project Name="DEMOGL" ConfigName="debug"/>
+    </WorkspaceConfiguration>
+    <WorkspaceConfiguration Name="release" Selected="yes">
+      <Project Name="DEMOGL" ConfigName="release"/>
+    </WorkspaceConfiguration>
+  </BuildMatrix>
+</CodeLite_Workspace>
