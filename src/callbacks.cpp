@@ -20,6 +20,8 @@
 #define PI         3.14159265359f
 #define WIDTH      1024
 #define HEIGHT     700
+#define ZNEAR      0.1f
+#define ZFAR       5000.f
 
 
 // names
@@ -31,6 +33,7 @@ enum {
 	VERTEX_ARRAY_COUNT,
 
 	TEXTURE_ND = 0,
+	TEXTURE_ALBEDO,
 	TEXTURE_CORNELL,
 	TEXTURE_COUNT,
 
@@ -40,20 +43,22 @@ enum {
 	FRAMEBUFFER_ND = 0,
 	FRAMEBUFFER_COUNT,
 
-	PROGRAM_ND = 0,
-	PROGRAM_POSTFX,
+	PROGRAM_CORNELL = 0,
+	PROGRAM_SSGI,
 	PROGRAM_COUNT,
 
-	LOCATION_ND_MVP = 0,
+	LOCATION_CORNELL_MVP = 0,
+	LOCATION_CORNELL_MV,
+	LOCATION_CORNELL_EYE,
+	LOCATION_CORNELL_PLANES,
+	LOCATION_CORNELL_SKY,
+	LOCATION_SSGI_ND,
+	LOCATION_SSGI_ALBEDO,
+	LOCATION_SSGI_SCREENSIZE,
+	LOCATION_SSGI_LIGHTDIR,
 	LOCATION_COUNT,
 
-	GEOMETRY_SPHERE = 0,
-	GEOMETRY_TORUS,
-	GEOMETRY_SHELL,
-	GEOMETRY_KLEINBOTTLE,
-	GEOMETRY_COUNT,
-
-	UNIFORM_BINDING_RANDOM=0,
+	UNIFORM_BINDING_RANDOM = 0,
 	UNIFORM_BINDING_COUNT
 };
 
@@ -73,18 +78,14 @@ std::vector<GLuint> programs(PROGRAM_COUNT);
 std::vector<GLint> locations(LOCATION_COUNT);
 
 // camera transformations
-Affine cameraFrame(Affine::Translation(Vector3(0,0,-128)));
+Affine cameraFrame(Affine::Translation(Vector3(0,0,-1000)));
 
 // cursor
 GLint prevX(0), prevY(0);
 bool leftButton(false), rightButton(false);
 
-// envmap
-GLuint cubemap(TEXTURE_GROVE);
-
 // visualisation
 bool wireframe(false);
-GLuint geometry(GEOMETRY_SPHERE);
 
 
 // --------------------------------------------------------------------
@@ -96,7 +97,6 @@ static GLvoid load_renderbuffers();
 static GLvoid load_framebuffers();
 static GLvoid setup_hud();
 // gui callbacks
-static GLvoid TW_CALL set_geometry(const GLvoid *value, GLvoid *clientData);
 template<typename T>
 static GLvoid TW_CALL get_t(GLvoid *value, GLvoid *clientData);
 
@@ -135,8 +135,9 @@ GLvoid on_init(GLint argc, GLchar **argv) {
 	setup_hud();
 
 	// set state
-	glClearColor(0.2,0.2,0.2,1);
+	glClearColor(1.0,0.0,0.0,0.0);
 	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	glEnable(GL_CULL_FACE);
 	glPatchParameteri(GL_PATCH_VERTICES,4);
 	glBindVertexArray(vertexArrays[VERTEX_ARRAY_EMPTY]);
 }
@@ -148,26 +149,41 @@ GLvoid on_display() {
 	// build matrices
 	Matrix4x4 mvp = Matrix4x4::Perspective(PI*0.35f,
 	                                       WIDTH/GLfloat(HEIGHT),
-	                                       0.1f,
-	                                       5024.f)
+	                                       ZNEAR,
+	                                       ZFAR)
 	              * cameraFrame.ExtractTransformMatrix();
-	Matrix3x3 rot = cameraFrame.GetUnitAxis().Transpose();
-	Vector3 eye   = rot * -cameraFrame.GetPosition();
+	Matrix3x3 rot = cameraFrame.GetUnitAxis();
+	Vector3 eye   = rot.Transpose() * -cameraFrame.GetPosition();
+	Vector3 light = rot * Vector3(1,2,1);
+	light = light.Normalize();
 
 	// update mvp TODO: use UBO and buffer streaming
-//	glProgramUniformMatrix4fv(programs[PROGRAM_GEOMETRY],
-//	                          locations[LOCATION_SPHERE_MVP],
-//	                          1, GL_FALSE, &mvp[0][0]);
-//	glProgramUniformMatrix4fv(programs[PROGRAM_TANGENT],
-//	                          locations[LOCATION_TANGENT_MVP],
-//	                          1, GL_FALSE, &mvp[0][0]);
-//	glProgramUniformMatrix4fv(programs[PROGRAM_SKYBOX],
-//	                          locations[LOCATION_SKYBOX_MVP],
-//	                          1, GL_FALSE, &mvp[0][0]);
-//	glProgramUniform3fv(programs[PROGRAM_GEOMETRY],
-//	                    locations[LOCATION_SPHERE_EYE],
-//	                    1, &eye[0]);
+	glProgramUniformMatrix4fv(programs[PROGRAM_CORNELL],
+	                          locations[LOCATION_CORNELL_MVP],
+	                          1, GL_FALSE, &mvp[0][0]);
+	glProgramUniformMatrix3fv(programs[PROGRAM_CORNELL],
+	                          locations[LOCATION_CORNELL_MV],
+	                          1, GL_FALSE, &rot[0][0]);
+	glProgramUniform3fv(programs[PROGRAM_CORNELL],
+	                    locations[LOCATION_CORNELL_EYE],
+	                    1, &eye[0]);
+	glProgramUniform3fv(programs[PROGRAM_SSGI],
+	                    locations[LOCATION_SSGI_LIGHTDIR],
+	                    1, &light[0]);
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers[FRAMEBUFFER_ND]);
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+	glEnable(GL_DEPTH_TEST);
+	glUseProgram(programs[PROGRAM_CORNELL]);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 14);
+	glDisable(GL_DEPTH_TEST);
 
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glUseProgram(programs[PROGRAM_SSGI]);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+//	glBlitFramebuffer(0,0,WIDTH,HEIGHT,
+//	                  0,0,WIDTH,HEIGHT,
+//	                  GL_COLOR_BUFFER_BIT,
+//	                  GL_NEAREST);
 
 	// draw gui
 	TwDraw();
@@ -194,7 +210,7 @@ GLvoid on_keypress(GLubyte key, GLint x, GLint y) {
 	switch(key) {
 		case 'r': load_programs(); break; // reload programs
 		case 'w': wireframe = !wireframe; break; // wireframe
-		case 'p': glu::save_gl_front_buffer(0,0,WIDTH,HEIGHT);  break; // screenshot
+		case 'p': glu::save_gl_front_buffer(0,0,WIDTH,HEIGHT); break; // screenshot
 		default: break;
 	};
 }
@@ -306,50 +322,52 @@ static GLvoid load_programs() {
 	// load
 //	std::string options = geomOptStr[geometry];
 //	options+= cubemap == TEXTURE_GRACE ? "#define _SKY_GRACE\n" : "";
-//	glu::load_glsl_program(programs[PROGRAM_GEOMETRY],
-//	                       SHADER_DIR+std::string("geometry.glsl"),
-//	                       options+surfaceSrc+hdrSrc,
-//	                       GL_TRUE);
-//	glu::load_glsl_program(programs[PROGRAM_TANGENT],
-//	                       SHADER_DIR+std::string("tangents.glsl"),
-//	                       options+surfaceSrc,
-//	                       GL_TRUE);
-//	glu::load_glsl_program(programs[PROGRAM_SKYBOX],
-//	                       SHADER_DIR+std::string("skybox.glsl"),
-//	                       hdrSrc,
-//	                       GL_TRUE);
-//	glu::load_glsl_program(programs[PROGRAM_BUMP],
-//	                       SHADER_DIR+std::string("bumps.glsl"),
-//	                       "",
-//	                       GL_TRUE);
+	glu::load_glsl_program(programs[PROGRAM_CORNELL],
+	                       SHADER_DIR+std::string("cornell.glsl"),
+	                       "",
+	                       GL_TRUE);
+	glu::load_glsl_program(programs[PROGRAM_SSGI],
+	                       SHADER_DIR+std::string("ssgi.glsl"),
+	                       "",
+	                       GL_TRUE);
 
 	// save uniform locations
-//	locations[LOCATION_SPHERE_MVP]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"uModelViewProjection");
-//	locations[LOCATION_SPHERE_EYE]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"uEye");
-//	locations[LOCATION_SPHERE_SKY]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"sSky");
-//	locations[LOCATION_SPHERE_EXP]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"uExposure");
-//	locations[LOCATION_SPHERE_MEAN]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"uMean");
-//	locations[LOCATION_SPHERE_VAR]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"uVariance");
-//	locations[LOCATION_SPHERE_COR]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"uCorrelation");
-//	locations[LOCATION_SPHERE_ALPHA]
-//		= glGetUniformLocation(programs[PROGRAM_GEOMETRY],"uAlpha");
-//	locations[LOCATION_TANGENT_MVP]
-//		= glGetUniformLocation(programs[PROGRAM_TANGENT],"uModelViewProjection");
-//	locations[LOCATION_SKYBOX_MVP]
-//		= glGetUniformLocation(programs[PROGRAM_SKYBOX],"uModelViewProjection");
-//	locations[LOCATION_SKYBOX_SKY]
-//		= glGetUniformLocation(programs[PROGRAM_SKYBOX],"sSky");
-//	locations[LOCATION_SKYBOX_EXP]
-//		= glGetUniformLocation(programs[PROGRAM_SKYBOX],"uExposure");
-//	locations[LOCATION_BUMP_TIME]
-//		= glGetUniformLocation(programs[PROGRAM_BUMP],"uT");
+	locations[LOCATION_CORNELL_MVP]
+		= glGetUniformLocation(programs[PROGRAM_CORNELL],"uModelViewProjection");
+	locations[LOCATION_CORNELL_MV]
+		= glGetUniformLocation(programs[PROGRAM_CORNELL],"uModelView");
+	locations[LOCATION_CORNELL_EYE]
+		= glGetUniformLocation(programs[PROGRAM_CORNELL],"uEyePos");
+	locations[LOCATION_CORNELL_PLANES]
+		= glGetUniformLocation(programs[PROGRAM_CORNELL],"uPlanes");
+	locations[LOCATION_CORNELL_SKY]
+		= glGetUniformLocation(programs[PROGRAM_CORNELL],"sSky");
+	locations[LOCATION_SSGI_SCREENSIZE]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uScreenSize");
+	locations[LOCATION_SSGI_LIGHTDIR]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"uLightDir");
+	locations[LOCATION_SSGI_ND]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"sNd");
+	locations[LOCATION_SSGI_ALBEDO]
+		= glGetUniformLocation(programs[PROGRAM_SSGI],"sKa");
+
+	// set constants
+	glProgramUniform1i(programs[PROGRAM_CORNELL],
+	                   locations[LOCATION_CORNELL_SKY],
+	                   TEXTURE_CORNELL);
+	glProgramUniform2f(programs[PROGRAM_CORNELL],
+	                   locations[LOCATION_CORNELL_PLANES],
+//	                   ZNEAR, ZFAR);
+	                   1.f/(ZFAR-ZNEAR), -ZNEAR/(ZFAR-ZNEAR));
+	glProgramUniform1i(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_ND],
+	                   TEXTURE_ND);
+	glProgramUniform1i(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_ALBEDO],
+	                   TEXTURE_ALBEDO);
+	glProgramUniform2f(programs[PROGRAM_SSGI],
+	                   locations[LOCATION_SSGI_SCREENSIZE],
+	                   WIDTH,HEIGHT);
 }
 
 
@@ -359,9 +377,9 @@ static GLvoid load_textures() {
 	const std::string TEXTURE_DIR("../../textures/");
 	glActiveTexture(GL_TEXTURE0+TEXTURE_CORNELL);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, textures[TEXTURE_CORNELL]); {
-		glu::TexImageRgba4ub red  (256,256,1,255,0,0,255);
-		glu::TexImageRgba4ub green(256,256,1,0,255,0,255);
-		glu::TexImageRgba4ub white(256,256,1,255,255,255,255);
+		glu::TexImageRgba4ub red  (64,64,1,255,0,0,255);
+		glu::TexImageRgba4ub green(64,64,1,0,255,0,255);
+		glu::TexImageRgba4ub white(64,64,1,255,255,255,255);
 		glu::TexImageArray array;
 		array.push_back(&green); // xpos
 		array.push_back(&red);   // xneg
@@ -369,7 +387,7 @@ static GLvoid load_textures() {
 		array.push_back(&white);
 		array.push_back(&white);
 		array.push_back(&white);
-		glu::load_texture_cube_map(array, GL_RGB8, GL_TRUE, GL_FALSE);
+		glu::load_texture_cube_map(array, GL_RGBA8, GL_TRUE, GL_FALSE);
 		glTexParameteri(GL_TEXTURE_CUBE_MAP,
 		                GL_TEXTURE_MIN_FILTER,
 		                GL_LINEAR_MIPMAP_LINEAR);
@@ -383,8 +401,21 @@ static GLvoid load_textures() {
 	glActiveTexture(GL_TEXTURE0+TEXTURE_ND);
 	glBindTexture(GL_TEXTURE_RECTANGLE, textures[TEXTURE_ND]);
 		glTexStorage2D(GL_TEXTURE_RECTANGLE,
-		               1, // no mips 
+		               1,
 		               GL_RGBA16,
+		               WIDTH,
+		               HEIGHT);
+		glTexParameteri(GL_TEXTURE_RECTANGLE,
+		                GL_TEXTURE_MIN_FILTER,
+		                GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_RECTANGLE,
+		                GL_TEXTURE_MAG_FILTER,
+		                GL_LINEAR);
+	glActiveTexture(GL_TEXTURE0+TEXTURE_ALBEDO);
+	glBindTexture(GL_TEXTURE_RECTANGLE, textures[TEXTURE_ALBEDO]);
+		glTexStorage2D(GL_TEXTURE_RECTANGLE,
+		               1,
+		               GL_RGB8,
 		               WIDTH,
 		               HEIGHT);
 		glTexParameteri(GL_TEXTURE_RECTANGLE,
@@ -412,17 +443,24 @@ static GLvoid load_renderbuffers() {
 // ====================================================================
 // setup framebuffers
 static GLvoid load_framebuffers() {
+	const GLenum drawBuffers[]={GL_COLOR_ATTACHMENT0, 
+	                            GL_COLOR_ATTACHMENT1};
 	glBindFramebuffer(GL_FRAMEBUFFER, framebuffers[FRAMEBUFFER_ND]);
 		glFramebufferTexture2D(GL_FRAMEBUFFER,
 		                       GL_COLOR_ATTACHMENT0,
 		                       GL_TEXTURE_RECTANGLE,
 		                       textures[TEXTURE_ND],
 		                       0);
+		glFramebufferTexture2D(GL_FRAMEBUFFER,
+		                       GL_COLOR_ATTACHMENT1,
+		                       GL_TEXTURE_RECTANGLE,
+		                       textures[TEXTURE_ALBEDO],
+		                       0);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER,
 		                          GL_DEPTH_ATTACHMENT,
 		                          GL_RENDERBUFFER,
 		                          renderbuffers[RENDERBUFFER_DEPTH]);
-		glDrawBuffer(GL_COLOR_ATTACHMENT0);
+		glDrawBuffers(2, drawBuffers);
 	ASSERT(glu::check_gl_framebuffer_complete()
 		       &&  "Invalid framebuffer configuration" );
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -452,30 +490,25 @@ static GLvoid setup_hud() {
 	TwDefine("HUD text='light'");
 	TwDefine("HUD valueswidth=64");
 
-	TwEnumVal geometryEV[] = {
-		{GEOMETRY_SPHERE,      "Sphere"     },
-		{GEOMETRY_TORUS,       "Torus"      },
-		{GEOMETRY_SHELL,       "Shell"      },
-		{GEOMETRY_KLEINBOTTLE, "Kleinbottle"}
-	};
-	TwType geometryType= TwDefineEnum("Geometry", geometryEV, 4);
-	TwAddVarCB(hud,
-	           "Geometry",
-	           geometryType,
-	           &set_geometry,
-	           &get_t<GLint>,
-	           &geometry,
-	           "help='Change geometry.' group='Scene' ");
+//	TwEnumVal geometryEV[] = {
+//		{GEOMETRY_SPHERE,      "Sphere"     },
+//		{GEOMETRY_TORUS,       "Torus"      },
+//		{GEOMETRY_SHELL,       "Shell"      },
+//		{GEOMETRY_KLEINBOTTLE, "Kleinbottle"}
+//	};
+//	TwType geometryType= TwDefineEnum("Geometry", geometryEV, 4);
+//	TwAddVarCB(hud,
+//	           "Geometry",
+//	           geometryType,
+//	           &set_geometry,
+//	           &get_t<GLint>,
+//	           &geometry,
+//	           "help='Change geometry.' group='Scene' ");
 }
 
 
 // ====================================================================
 // gui callbacks
-static GLvoid TW_CALL set_geometry(const GLvoid *value, GLvoid *clientData) {
-	geometry = * reinterpret_cast<const GLint *>(value);
-	load_programs();
-}
-
 template<typename T>
 static inline GLvoid TW_CALL get_t(GLvoid *value, GLvoid *clientData) {
 	*reinterpret_cast<T*>(value) = 

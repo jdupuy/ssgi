@@ -1233,17 +1233,17 @@ GLvoid load_texture_cube_map(const std::vector<TexImage*>& images,
 		               internalFormat,
 		               images[0]->width,
 		               images[0]->height);
-	else
-		for(GLint i=0;i<6;++i)
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i,
-			             0,
-			             internalFormat,
-			             images[0]->width,
-			             images[0]->height,
-			             0,
-			             images[i]->format,
-			             images[i]->type,
-			             NULL);
+//	else
+//		for(GLint i=0;i<6;++i)
+//			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i,
+//			             0,
+//			             internalFormat,
+//			             images[i]->width,
+//			             images[i]->height,
+//			             0,
+//			             images[i]->format,
+//			             images[i]->type,
+//			             NULL);
 
 	_GLU_PUSH_PIXEL_UNPACK_STATE(); // push pixel unpack state
 		for(GLint i=0;i<6;++i) {
@@ -1259,14 +1259,23 @@ GLvoid load_texture_cube_map(const std::vector<TexImage*>& images,
 			glPixelStorei(GL_UNPACK_ALIGNMENT, images[i]->alignment);
 
 			// upload
-			glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i,
-			                0,
-			                0,0,
-			                images[i]->width,
-			                images[i]->height,
-			                images[i]->format,
-			                images[i]->type,
-			                images[i]->data);
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i,
+			             0,
+			             internalFormat,
+			             images[i]->width,
+			             images[i]->height,
+			             0,
+			             images[i]->format,
+			             images[i]->type,
+			             images[i]->data);
+//			glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i,
+//			                0,
+//			                0,0,
+//			                images[i]->width,
+//			                images[i]->height,
+//			                images[i]->format,
+//			                images[i]->type,
+//			                0);
 		}
 	_GLU_POP_PIXEL_UNPACK_STATE();  // pop pixel unpack state
 

@@ -6,6 +6,7 @@
 uniform sampler2DRect sNd; // normal + depth
 uniform sampler2DRect sKa; // albedo
 uniform vec2 uScreenSize;  // screen dimensions
+uniform vec3 uLightDir;    // ligh pos in view space
 
 
 // --------------------------------------------------
@@ -31,7 +32,10 @@ void main() {
 	vec4 t1 = texture(sNd,st);
 	vec3 t2 = texture(sKa,st).rgb;
 	oColour.rgb = t2;
-	oColour.rgb = t1.aaaa;
+//	oColour.rgb = t1.aaaa;
+	vec3 n = t1.rgb*2.0-1.0;
+	float l = dot(uLightDir, n);
+	oColour*= max(0.0,l);
 }
 #endif // _FRAGMENT_
 
