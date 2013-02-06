@@ -59,20 +59,21 @@ void main() {
 layout(location=0) in vec2 iTexCoord;
 layout(location=0) out vec4 oColour;
 void main() {
+	const float ATTF = 1e-5; // attenuation factor
 	vec2 st = iTexCoord*uScreenSize;
 	vec4 t1 = texture(sNd,st);      // read normal + depth
 	vec3 t2 = texture(sKa,st).rgb; // colour
 	vec3 n = t1.rgb*2.0-1.0; // rebuild normal
 	vec3 p = ndc_to_view(iTexCoord*2.0-1.0, t1.a, uClipZ, uTanFovs); // get view pos
 	vec3 l = uLightPos - p; // light vec
-	vec3 nl = normalize(l);
-	float att = 1.0+1e-3*length(l);
-	oColour.rgb = 2.0*t2*max(0.0,dot(nl,n))/(att*att);
+	float att = 1.0+ATTF*length(l);
+	float nDotL = max(0.0,dot(normalize(l),n));
+	oColour.rgb = t2*nDotL/(att*att);
 
 #if defined GI_SSAO
 	float occ = 0.0;
 	float occCnt = 0.0;
-	vec3 rvec = texture(sNoise, gl_FragCoord.xy/64.0).rgb*2.0-1.0;
+	vec3 rvec = normalize(texture(sNoise, gl_FragCoord.xy/64.0).rgb*2.0-1.0);
 	for(int i=0; i<uSampleCnt && t1.a < 1.0; ++i) {
 		vec3 dir = reflect(uSamples[i].xyz,rvec); // a la Crysis
 		dir -= 2.0*dir*step(dot(n,dir),0.0);      // a la Starcraft
@@ -83,19 +84,17 @@ void main() {
 		outOfScreen.zw = greaterThan(spNdc, vec2(1));
 		if(any(outOfScreen)) continue;
 		vec4 spNd = texture(sNd,(spNdc*0.5 + 0.5)*uScreenSize); // get nd data
-		if(spNd.a >= 1.0) continue;
 		vec3 occEye = -sp/sp.z*(spNd.a*uClipZ.x+uClipZ.y); // compute correct pos
-//		vec3 occEye = ndc_to_view(spNdc,spNd.a,uClipZ,uTanFovs); // compute correct pos
 		vec3 occVec = occEye - p; // vector
-		float att2 = 1.0+1e-3*length(occVec); // quadratic attenuation
-		occ += max(0.0,dot(normalize(occVec),n)-0.42) / (att2*att2);
+		float att2 = 1.0+ATTF*length(occVec); // quadratic attenuation
+		occ += max(0.0,dot(normalize(occVec),n)-0.25) / (att2*att2);
 		++occCnt;
 	};
 	oColour.rgb*= occCnt > 0.0 ? vec3(1.0-occ*uGiBoost/occCnt) : vec3(1);
 #elif defined GI_SSDO
 	vec3 gi = vec3(0.0);
 	float giCnt = 0.0;
-	vec3 rvec = texture(sNoise, gl_FragCoord.xy/64.0).rgb*2.0-1.0;
+	vec3 rvec = normalize(texture(sNoise, gl_FragCoord.xy/64.0).rgb*2.0-1.0);
 	for(int i=0; i<uSampleCnt && t1.a < 1.0; ++i) {
 		vec3 dir = reflect(uSamples[i].xyz,rvec); // a la Crysis
 		dir -= 2.0*dir*step(dot(n,dir),0.0);      // a la Starcraft
@@ -107,19 +106,19 @@ void main() {
 		if(any(outOfScreen)) continue;
 		vec2 spSt = (spNdc*0.5 + 0.5)*uScreenSize;
 		vec4 spNd = texture(sNd,spSt); // get nd data
-		if(spNd.a >= 1.0) continue;
 		vec3 occEye = -sp/sp.z*(spNd.a*uClipZ.x+uClipZ.y); // compute correct pos
 		vec3 occVec = occEye - p; // vector
-		float att2 = 1.0+1e-3*length(occVec); // quadratic attenuation
+		float att2 = 1.0+ATTF*length(occVec); // quadratic attenuation
 		vec3 spL = uLightPos - occEye; // sample light vec
 		vec3 spKa = texture(sKa, spSt).rgb; // sample albedo
 		vec3 spN = spNd.rgb*2.0-1.0; // sample normal
-		float spAtt = 1.0+1e-3*length(spL); // quadratic attenuation
-		vec3 spE = 2.0*spKa*max(0.0,dot(normalize(spL),spN))/(spAtt*spAtt);
-		gi+= spE*max(0.0,dot(normalize(occVec),n))/(att2*att2);
+		float spAtt = 1.0+ATTF*length(spL); // quadratic attenuation
+		vec3 spE = spKa*max(0.0,dot(normalize(spL),spN))/(spAtt*spAtt); // can precomp.
+		float v = 1.0-max(0.0,dot(n,spN));
+		gi+= spE*v*max(0.0,dot(normalize(occVec),n))/(att2*att2);
 		++giCnt;
 	};
-	oColour.rgb += giCnt > 0.0 ? t2*gi*uGiBoost/giCnt : vec3(0);
+	oColour.rgb+= giCnt > 0.0 ? t2*gi*nDotL*uGiBoost/giCnt : vec3(0);
 #endif // GI_SSAO
 }
 #endif // _FRAGMENT_
