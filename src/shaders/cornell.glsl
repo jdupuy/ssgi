@@ -37,7 +37,7 @@ layout(location=1) out vec3 oTexCoord;
 layout(location=2) out vec3 oEyeToPos;
 
 void main() {
-	const float BOX_SIZE=500.0;
+	const float BOX_SIZE=200.0;
 	vec3 p1 = gl_in[0].gl_Position.xyz*BOX_SIZE;
 	vec3 p2 = gl_in[1].gl_Position.xyz*BOX_SIZE;
 	vec3 p3 = gl_in[2].gl_Position.xyz*BOX_SIZE;
