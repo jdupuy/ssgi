@@ -19,10 +19,10 @@
 // macros / constants
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT          0x84FE
 #define PI          3.14159265359f
-#define WIDTH       1024
+#define WIDTH       1000
 #define HEIGHT      700
 #define ZNEAR       0.1f
-#define ZFAR        3000.f
+#define ZFAR        1000.f
 #define SAMPLE_CNT  32
 const GLfloat FOVY  = PI*0.35f;
 const GLfloat RATIO = GLfloat(WIDTH)/GLfloat(HEIGHT);
@@ -94,7 +94,7 @@ std::vector<GLuint> programs(PROGRAM_COUNT);
 std::vector<GLint> locations(LOCATION_COUNT);
 
 // camera transformations
-Affine cameraFrame(Affine::Translation(Vector3(0,0,-1000)));
+Affine cameraFrame(Affine::Translation(Vector3(0,0,-400)));
 
 // cursor
 GLint prevX(0), prevY(0);
@@ -104,7 +104,7 @@ bool leftButton(false), rightButton(false);
 bool wireframe(false);
 GLint sampleCnt(8);   // samples per pixel
 GLint giMode(GI_NONE); // global illum mode
-GLfloat radius(3.0f); // radius size
+GLfloat radius(24.0f); // radius size
 GLfloat giBoost(1.0f); // gi boost
 bool rotate(true);   // rotate scene;
 
@@ -181,7 +181,7 @@ GLvoid on_display() {
 	              * mv;
 	Matrix3x3 rot = cameraFrame.GetUnitAxis();
 	Vector3 eye   = rot.Transpose() * -cameraFrame.GetPosition();
-	Vector4 light = rotate ? mv*Vector4(cos(t)*450.0,0,sin(t)*450.0,1)
+	Vector4 light = rotate ? mv*Vector4(cos(t)*150.0,0,sin(t)*150.0,1)
 	                       : mv*Vector4(0,0,0,1);
 
 	// update mvp TODO: use UBO and buffer streaming
@@ -410,7 +410,7 @@ static GLvoid load_programs() {
 	                   WIDTH,HEIGHT);
 	glProgramUniform2f(programs[PROGRAM_SSGI],
 	                   locations[LOCATION_SSGI_TANFOV],
-	                   tan(FOVY*RATIO*0.5f),tan(FOVY*0.5f));
+	                   tan(RATIO*FOVY*0.5f),tan(FOVY*0.5f));
 	glProgramUniform2f(programs[PROGRAM_SSGI],
 	                   locations[LOCATION_SSGI_CLIPZ],
 	                   ZFAR-ZNEAR,+ZNEAR);
@@ -446,7 +446,7 @@ static GLvoid load_textures() {
 	glBindTexture(GL_TEXTURE_CUBE_MAP, textures[TEXTURE_CORNELL]); {
 		glu::TexImageRgba4ub red  (256,256,1,255,0,0,255);
 		glu::TexImageRgba4ub green(256,256,1,0,255,0,255);
-		glu::TexImageRgba4ub white(256,256,1,255,255,255,255);
+		glu::TexImageRgba4ub white(256,256,1,215,215,215,255);
 		glu::TexImageArray array;
 		array.push_back(&green); // xpos
 		array.push_back(&red);   // xneg
